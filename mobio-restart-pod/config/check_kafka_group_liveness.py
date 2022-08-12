@@ -82,7 +82,7 @@ def warning_slack(group_id, pod_name):
         }
         url = SLACK_WEB_HOOK
         if not url:
-            url = "https://hooks.slack.com/services/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"
+            url = "https://hooks.slack.com/services/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"
         requests.post(url, json=data_json)
     except Exception as ex:
         print("Error: ", ex)

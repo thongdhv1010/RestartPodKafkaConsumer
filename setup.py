@@ -53,7 +53,7 @@ with open("README.md", "r") as fh:
 
 data_files = package_data_files(__PACKAGE_NAME__)
 
-version = "0.0.8"
+version = "0.1.2"
 setup(
     name="mobio-restart-pod",  # Required
     version=version,  # Required
