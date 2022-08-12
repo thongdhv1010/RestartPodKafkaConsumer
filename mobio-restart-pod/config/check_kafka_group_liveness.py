@@ -17,28 +17,31 @@ import sys
 from datetime import datetime
 from os.path import exists
 
-APPLICATION_DATA_DIR = os.environ.get("APPLICATION_DATA_DIR")
+import requests
+
+DATA_DIR = os.environ.get("APPLICATION_DATA_DIR")
+SLACK_WEB_HOOK = os.environ.get("SLACK_URI_RESTART_POD")
+POD_NAME = os.environ.get("HOSTNAME")
 
 
 def get_topic_kafka(group_id):
     try:
         # Read file group data
-        file_group_data = APPLICATION_DATA_DIR + "/kafka-consumer-group-data.json"
+        file_group_data = DATA_DIR + "/kafka-monitor-data" + "/{}.json".format(group_id)
         if exists(file_group_data):
-            # Kiểm tra thời gian tạo file, nếu out date quá thì k áp dụng để restart
-            m_time = os.path.getmtime(file_group_data)
-            # dt_m = datetime.fromtimestamp(m_time)
-            duration = datetime.now().timestamp() - m_time  # Số giây kể từ thời điểm update file
-            # Nếu dữ liệu file data update quá 10 phút thì k kiểm tra nữa
-            if duration > 600:
-                return 0
-
             f = open(file_group_data)
             groups_data = f.read()
             if not groups_data:
                 return 0
             if groups_data:
                 groups_data = eval(groups_data)
+            # Kiểm tra thời gian update file, nếu out date quá thì k áp dụng để restart
+            m_time = groups_data.get("updated_time")
+            # dt_m = datetime.fromtimestamp(m_time)
+            duration = datetime.utcnow().timestamp() - m_time  # Số giây kể từ thời điểm update file
+            # Nếu dữ liệu file data update quá 10 phút thì k kiểm tra nữa
+            if duration > 600:
+                return 0
         else:
             return 0
 
@@ -50,15 +53,13 @@ def get_topic_kafka(group_id):
             if consumer_config:
                 configs = consumer_config.split(":")
                 if configs:
-                    pod_name = os.environ.get("HOSTNAME")
                     pod_config = configs[0]
-                    if pod_config == pod_name:
+                    if pod_config == POD_NAME:
                         consumer_id = configs[1]
-                        if group_id in groups_data:
-                            members_id = groups_data.get(group_id)
-                            if isinstance(members_id, list):
-                                if consumer_id not in members_id:
-                                    return 1
+                        members_id = groups_data.get("members_id")
+                        if isinstance(members_id, list):
+                            if consumer_id not in members_id:
+                                return 1
 
         return 0
     except Exception:
@@ -66,10 +67,35 @@ def get_topic_kafka(group_id):
         return 0
 
 
+def warning_slack(group_id, pod_name):
+    try:
+        data_json = {
+            "attachments": [
+                {
+                    "color": "#dc3907",
+                    "pretext": "Consumer restart",
+                    "title": "Pod name: {}".format(pod_name),
+                    "author_name": "Group Name: {}".format(group_id),
+                    "text": "Time: {}".format(datetime.utcnow())
+                }
+            ]
+        }
+        url = SLACK_WEB_HOOK
+        if not url:
+            url = "https://hooks.slack.com/services/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"
+        requests.post(url, json=data_json)
+    except Exception as ex:
+        print("Error: ", ex)
+
+
 if __name__ == '__main__':
     group_id = sys.argv[1] if len(sys.argv) > 1 else None
     check_status = get_topic_kafka(group_id)
     if check_status == 1:
+        # Push slack restart pod
+        warning_slack(group_id, POD_NAME)
         print("NotWorker")
     else:
         print("Alive")
+
+
