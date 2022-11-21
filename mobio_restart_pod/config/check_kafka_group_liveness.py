@@ -24,6 +24,17 @@ SLACK_WEB_HOOK = os.environ.get("SLACK_URI_RESTART_POD")
 POD_NAME = os.environ.get("HOSTNAME")
 
 
+def checK_status_consumer(group_id):
+    status = get_topic_kafka(group_id)
+    if status == 0:
+        exit(0)
+    elif status == 1:
+        warning_slack(group_id, POD_NAME)
+        exit(1)
+    else:
+        exit(0)
+
+
 def get_topic_kafka(group_id):
     try:
         # Read file group data
